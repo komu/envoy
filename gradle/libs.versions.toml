@@ -1,0 +1,24 @@
+[versions]
+kotlin = "2.1.10"
+kotlinxDatetime = "0.6.1"
+kotlinxSerializationJSON = "1.7.2"
+kotlinxCoroutines = "1.8.1"
+ktor = "3.1.2"
+logback = "1.5.12"
+anthropic = "1.1.0"
+
+[libraries]
+kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "kotlinxDatetime" }
+kotlinx-serialization = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerializationJSON" }
+kotlinx-coroutines = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
+ktor-server-netty = { module = "io.ktor:ktor-server-netty", version.ref="ktor" }
+ktor-server-websockets = { module = "io.ktor:ktor-server-websockets", version.ref="ktor" }
+ktor-server-callLogging = { module = "io.ktor:ktor-server-call-logging", version.ref="ktor" }
+ktor-server-defaultHeaders = { module = "io.ktor:ktor-server-default-headers", version.ref="ktor" }
+ktor-server-sessions = { module = "io.ktor:ktor-server-sessions", version.ref="ktor" }
+logback-classic = { module = "ch.qos.logback:logback-classic", version.ref="logback" }
+anthropic = { module = "com.anthropic:anthropic-java", version.ref="anthropic"}
+
+[plugins]
+kotlinPluginJvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlinPluginSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
