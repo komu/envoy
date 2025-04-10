@@ -12,7 +12,6 @@ dependencies {
     implementation(libs.ktor.server.websockets)
     implementation(libs.ktor.server.callLogging)
     implementation(libs.ktor.server.defaultHeaders)
-    implementation(libs.ktor.server.sessions)
     implementation(libs.anthropic)
     implementation(libs.logback.classic)
 }

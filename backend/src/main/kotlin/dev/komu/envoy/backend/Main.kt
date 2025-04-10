@@ -1,21 +1,21 @@
 package dev.komu.envoy.backend
 import io.ktor.server.application.*
-import io.ktor.server.engine.embeddedServer
+import io.ktor.server.engine.*
 import io.ktor.server.http.content.*
-import io.ktor.server.netty.Netty
-import io.ktor.server.plugins.calllogging.CallLogging
+import io.ktor.server.netty.*
+import io.ktor.server.plugins.calllogging.*
 import io.ktor.server.plugins.defaultheaders.*
 import io.ktor.server.routing.*
 import io.ktor.server.websocket.*
 import io.ktor.websocket.*
-import kotlinx.coroutines.channels.*
+import kotlinx.coroutines.channels.consumeEach
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlin.time.Duration.Companion.minutes
 
 fun main() {
 
-    embeddedServer(Netty, port = 8080) {
+    embeddedServer(Netty, host = "0.0.0.0", port = 8080) {
         ChatApplication().apply { main() }
     }.start(wait = true)
 }

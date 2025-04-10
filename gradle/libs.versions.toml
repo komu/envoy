@@ -15,7 +15,6 @@ ktor-server-netty = { module = "io.ktor:ktor-server-netty", version.ref="ktor" }
 ktor-server-websockets = { module = "io.ktor:ktor-server-websockets", version.ref="ktor" }
 ktor-server-callLogging = { module = "io.ktor:ktor-server-call-logging", version.ref="ktor" }
 ktor-server-defaultHeaders = { module = "io.ktor:ktor-server-default-headers", version.ref="ktor" }
-ktor-server-sessions = { module = "io.ktor:ktor-server-sessions", version.ref="ktor" }
 logback-classic = { module = "ch.qos.logback:logback-classic", version.ref="logback" }
 anthropic = { module = "com.anthropic:anthropic-java", version.ref="anthropic"}
 

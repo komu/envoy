@@ -36,7 +36,8 @@ export function useChatService() {
 
   useEffect(() => {
     // Create WebSocket connection
-    const socket = new WebSocket('ws://localhost:8080/ws');
+    const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+    const socket = new WebSocket(`${protocol}://${window.location.host}/ws`);
     socketRef.current = socket;
 
     socket.onopen = () => {
