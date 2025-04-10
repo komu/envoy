@@ -34,6 +34,8 @@ class ClaudeSession {
         }
 
     suspend fun message(message: String, session: DefaultWebSocketServerSession) {
+        log.info("send message: {}", message)
+
         params.addUserMessage(message)
 
         do {
@@ -48,6 +50,7 @@ class ClaudeSession {
                 }
 
             val result = messageAccumulator.message()
+            log.info("receive message: {}", result)
             params.addMessage(result)
 
             for (b in result.content()) {
@@ -60,14 +63,25 @@ class ClaudeSession {
 
                         val tool = tools.find { it.name == block.name }
                         if (tool != null) {
-                            val result = tool.code(block.input)
-                            params.addUserMessageOfBlockParams(
-                                listOf(
-                                    ContentBlockParam.ofToolResult(
-                                        ToolResultBlockParam.builder().toolUseId(block.id).content(result).build()
+                            try {
+                                val result = tool.code(block.input)
+                                params.addUserMessageOfBlockParams(
+                                    listOf(
+                                        ContentBlockParam.ofToolResult(
+                                            ToolResultBlockParam.builder().toolUseId(block.id).content(result).build()
+                                        )
                                     )
                                 )
-                            )
+                            } catch (e: Exception) {
+                                log.error("Error calling tool ${block.name}", e)
+                                params.addUserMessageOfBlockParams(
+                                    listOf(
+                                        ContentBlockParam.ofToolResult(
+                                            ToolResultBlockParam.builder().toolUseId(block.id).content("tool call failed").build()
+                                        )
+                                    )
+                                )
+                            }
 
                         } else {
                             log.warn("Unknown tool: ${block.name}")

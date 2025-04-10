@@ -22,6 +22,8 @@ fun main() {
 
 class ChatApplication {
 
+    private val logger = org.slf4j.LoggerFactory.getLogger(ChatApplication::class.java)
+
     fun Application.main() {
         install(DefaultHeaders)
         install(CallLogging)
@@ -35,10 +37,15 @@ class ChatApplication {
                 val session = ClaudeSession()
 
                 incoming.consumeEach { frame ->
-                    if (frame is Frame.Text) {
-                        val msg = Json.Default.decodeFromString(IncomingMessage.serializer(), frame.readText()).message
+                    try {
+                        if (frame is Frame.Text) {
+                            val msg =
+                                Json.Default.decodeFromString(IncomingMessage.serializer(), frame.readText()).message
 
-                        session.message(msg, this)
+                            session.message(msg, this)
+                        }
+                    } catch (e: Exception) {
+                        logger.error("Error processing message", e)
                     }
                 }
             }
