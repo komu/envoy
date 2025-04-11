@@ -1,66 +1,54 @@
-import { useEffect, useRef, useState } from 'react';
+import {useEffect, useRef, useState} from 'react';
 
-// Define message types
+interface ServerTextMessage {
+  type: "text";
+  text: string;
+  delta: boolean;
+}
+
+interface ServerThinkingMessage {
+  type: "thinking";
+  text: string;
+  delta: boolean;
+}
+
+interface ServerToolCallMessage {
+  type: "tool-call";
+  tool: string;
+  input: string;
+  output: string | null;
+}
+
+type ServerMessage = ServerTextMessage | ServerThinkingMessage | ServerToolCallMessage;
+
+export interface UserMessage {
+  type: "user";
+  text: string;
+}
+
 export interface AssistantMessage {
   type: "assistant";
-  message: string;
+  text: string;
+  complete: boolean;
+}
+
+export interface ThinkingMessage {
+  type: "thinking";
+  text: string;
+  complete: boolean;
 }
 
 export interface ToolCallMessage {
   type: "tool-call";
   tool: string;
   input: string;
+  output?: string;
 }
 
-export interface DeltaMessage {
-  type: "delta";
-  delta: string;
-}
-
-export interface UserMessage {
-  type: "user";
-  message: string;
-}
-
-export interface DeltaThinkingMessage {
-  type: "delta-thinking";
-  delta: string;
-}
-
-export interface ThinkingMessage {
-  type: "thinking";
-  message: string;
-}
-
-export type ChatMessage = AssistantMessage | ToolCallMessage | DeltaMessage | UserMessage | DeltaThinkingMessage | ThinkingMessage;
-
-export interface DisplayedToolCallMessage {
-  type: "tool-call";
-  tool: string;
-  input: string;
-}
-
-export interface DisplayedAssistantMessage {
-  type: "assistant";
-  message: string;
-  complete: boolean;
-}
-
-export interface DisplayedThinkingMessage {
-  type: "thinking";
-  message: string;
-  complete: boolean;
-}
-
-export interface DisplayedUserMessage {
-  type: "user";
-  message: string;
-}
-
-export type DisplayedMessage = DisplayedAssistantMessage | DisplayedToolCallMessage | DisplayedUserMessage | DisplayedThinkingMessage;
+export type ChatMessage = UserMessage | AssistantMessage | ToolCallMessage | ThinkingMessage;
 
 export function useChatService() {
-  const [messages, setMessages] = useState<DisplayedMessage[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [closed, setClosed] = useState(false);
   const socketRef = useRef<WebSocket | null>(null);
 
@@ -76,8 +64,8 @@ export function useChatService() {
 
     // Handle messages from the server
     socket.onmessage = (event) => {
-      const message = JSON.parse(event.data) as ChatMessage;
-      processMessage(message);
+      const message = JSON.parse(event.data) as ServerMessage;
+      setMessages(prevMessages => processServerMessage(prevMessages, message));
     };
 
     // Handle errors
@@ -97,82 +85,12 @@ export function useChatService() {
     };
   }, []);
 
-  const processMessage = (message: ChatMessage) => {
-    switch (message.type) {
-      case "assistant": {
-        setMessages(prevMessages => {
-          const lastMessage = prevMessages.length > 0 ? prevMessages[prevMessages.length - 1] : undefined;
-          const newMessage: DisplayedMessage = {type: "assistant", message: message.message, complete: true};
-          if (lastMessage?.type === "assistant" && !lastMessage.complete) {
-            return [...prevMessages.slice(0, -1), newMessage];
-          } else {
-            return [...prevMessages, newMessage];
-          }
-        });
-        break;
-      }
-      case "thinking": {
-        setMessages(prevMessages => {
-          const lastMessage = prevMessages.length > 0 ? prevMessages[prevMessages.length - 1] : undefined;
-          const newMessage: DisplayedMessage = {type: "thinking", message: message.message, complete: true};
-          if (lastMessage?.type === "thinking" && !lastMessage.complete) {
-            return [...prevMessages.slice(0, -1), newMessage];
-          } else {
-            return [...prevMessages, newMessage];
-          }
-        });
-        break;
-      }
-      case "user":
-        appendMessage({type: "user", message: message.message});
-        break;
-      case "tool-call":
-        appendMessage({type: "tool-call", tool: message.tool, input: message.input});
-        break;
-      case "delta": {
-        setMessages(prevMessages => {
-          const lastMessage = prevMessages.length > 0 ? prevMessages[prevMessages.length - 1] : undefined;
-          if (lastMessage?.type === "assistant" && !lastMessage.complete) {
-            return [...prevMessages.slice(0, -1), {
-              type: "assistant",
-              message: lastMessage.message + message.delta,
-              complete: false
-            }];
-          } else {
-            return [...prevMessages, {type: "assistant", message: message.delta, complete: false}];
-          }
-        });
-        break;
-      }
-      case "delta-thinking":
-      {
-        setMessages(prevMessages => {
-          const lastMessage = prevMessages.length > 0 ? prevMessages[prevMessages.length - 1] : undefined;
-          if (lastMessage?.type === "thinking" && !lastMessage.complete) {
-            return [...prevMessages.slice(0, -1), {
-              type: "thinking",
-              message: lastMessage.message + message.delta,
-              complete: false
-            }];
-          } else {
-            return [...prevMessages, {type: "thinking", message: message.delta, complete: false}];
-          }
-        });
-        break;
-      }
-    }
-  };
-
-  const appendMessage = (message: DisplayedMessage) => {
-    setMessages(prevMessages => [...prevMessages, message]);
-  };
-
-  const sendMessage = (message: string) => {
-    if (message && message.trim() !== '') {
-      appendMessage({type: 'user', message});
+  const sendMessage = (text: string) => {
+    if (text && text.trim() !== '') {
+      setMessages(prevMessages => [...prevMessages, {type: 'user', text}]);
 
       if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-        socketRef.current.send(JSON.stringify({message}));
+        socketRef.current.send(JSON.stringify({message: text}));
       }
     }
   };
@@ -182,4 +100,39 @@ export function useChatService() {
     closed,
     sendMessage,
   };
+}
+
+function processServerMessage(prevMessages: ChatMessage[], message: ServerMessage): ChatMessage[] {
+  const lastMessage = prevMessages.length > 0 ? prevMessages[prevMessages.length - 1] : undefined;
+
+  const appendMessage = (message: ChatMessage) => [...prevMessages, message];
+  const replaceLastMessage = (message: ChatMessage) => [...prevMessages.slice(0, -1), message];
+
+  const type = message.type;
+  switch (type) {
+    case "text": {
+      if (lastMessage?.type !== "assistant" || lastMessage.complete) {
+        return appendMessage({type: "assistant", text: message.text, complete: !message.delta});
+      } else {
+        return replaceLastMessage({
+          type: "assistant",
+          text: message.delta ? (lastMessage.text + message.text) : message.text,
+          complete: false
+        });
+      }
+    }
+    case "thinking": {
+      if (lastMessage?.type !== "thinking" || lastMessage.complete) {
+        return appendMessage({type: "thinking", text: message.text, complete: !message.delta});
+      } else {
+        return replaceLastMessage({
+          type: "thinking",
+          text: message.delta ? (lastMessage.text + message.text) : message.text,
+          complete: false
+        });
+      }
+    }
+    case "tool-call":
+      return appendMessage({type: "tool-call", tool: message.tool, input: message.input});
+  }
 }

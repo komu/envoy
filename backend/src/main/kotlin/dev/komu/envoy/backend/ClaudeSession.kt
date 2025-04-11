@@ -5,8 +5,6 @@ import com.anthropic.helpers.MessageAccumulator
 import com.anthropic.models.messages.*
 import io.ktor.server.websocket.*
 import io.ktor.websocket.*
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
 
@@ -48,10 +46,10 @@ class ClaudeSession {
 
                     when (val delta = event.contentBlockDelta?.delta?.asRawContentBlockDeltaType()) {
                         is RawContentBlockDeltaType.Text ->
-                            session.send(DeltaMessage(delta.text))
+                            session.send(OutgoingMessage.Text(delta.text, delta = true))
 
                         is RawContentBlockDeltaType.Thinking ->
-                            session.send(DeltaThinkingMessage(delta.text))
+                            session.send(OutgoingMessage.Thinking(delta.text, delta = true))
 
                         is RawContentBlockDeltaType.Citation,
                         is RawContentBlockDeltaType.InputJson,
@@ -71,10 +69,10 @@ class ClaudeSession {
             for (b in result.content()) {
                 when (val block = b.asContentBlockType()) {
                     is ContentBlockType.Text ->
-                        session.send(AssistantMessage(block.text))
+                        session.send(OutgoingMessage.Text(block.text))
 
                     is ContentBlockType.ToolUse -> {
-                        session.send(ToolCallMessage(tool = block.name, input = block.input.prettyPrint()))
+                        session.send(OutgoingMessage.ToolCall(tool = block.name, input = block.input.prettyPrint()))
 
                         val tool = tools.find { it.name == block.name }
                         if (tool != null) {
@@ -105,11 +103,10 @@ class ClaudeSession {
                     }
 
                     is ContentBlockType.Thinking ->
-                        session.send(ThinkingMessage(block.toString()))
+                        session.send(OutgoingMessage.Thinking(block.toString()))
 
-                    is ContentBlockType.RedactedThinking -> {
+                    is ContentBlockType.RedactedThinking ->
                         log.warn("Unhandled redacted thinking block: {}", block)
-                    }
                 }
             }
 
@@ -123,29 +120,6 @@ class ClaudeSession {
     }
 }
 
-suspend fun WebSocketSession.send(message: ChatMessage) {
-    send(Json.Default.encodeToString(ChatMessage.serializer(), message))
+suspend fun WebSocketSession.send(message: OutgoingMessage) {
+    send(Json.Default.encodeToString(OutgoingMessage.serializer(), message))
 }
-
-@Serializable
-sealed class ChatMessage
-
-@Serializable
-@SerialName("assistant")
-data class AssistantMessage(val message: String) : ChatMessage()
-
-@Serializable
-@SerialName("tool-call")
-data class ToolCallMessage(val tool: String, val input: String) : ChatMessage()
-
-@Serializable
-@SerialName("delta")
-data class DeltaMessage(val delta: String) : ChatMessage()
-
-@Serializable
-@SerialName("delta-thinking")
-data class DeltaThinkingMessage(val delta: String) : ChatMessage()
-
-@Serializable
-@SerialName("thinking")
-data class ThinkingMessage(val message: String) : ChatMessage()

@@ -1,4 +1,5 @@
 package dev.komu.envoy.backend
+
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
 import io.ktor.server.http.content.*
@@ -9,7 +10,6 @@ import io.ktor.server.routing.*
 import io.ktor.server.websocket.*
 import io.ktor.websocket.*
 import kotlinx.coroutines.channels.consumeEach
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlin.time.Duration.Companion.minutes
 
@@ -33,26 +33,25 @@ class ChatApplication {
 
         routing {
             webSocket("/ws") {
-
-                val session = ClaudeSession()
-
-                incoming.consumeEach { frame ->
-                    try {
-                        if (frame is Frame.Text) {
-                            val msg =
-                                Json.Default.decodeFromString(IncomingMessage.serializer(), frame.readText()).message
-
-                            session.message(msg, this)
-                        }
-                    } catch (e: Exception) {
-                        logger.error("Error processing message", e)
-                    }
-                }
+                handleWebSocketSesssion()
             }
             staticResources("", "web")
         }
     }
 
-    @Serializable
-    data class IncomingMessage(val message: String)
+    private suspend fun DefaultWebSocketServerSession.handleWebSocketSesssion() {
+        val session = ClaudeSession()
+
+        incoming.consumeEach { frame ->
+            try {
+                if (frame is Frame.Text) {
+                    val msg = Json.Default.decodeFromString(IncomingMessage.serializer(), frame.readText()).message
+
+                    session.message(msg, this)
+                }
+            } catch (e: Exception) {
+                logger.error("Error processing message", e)
+            }
+        }
+    }
 }

@@ -1,5 +1,5 @@
 import {memo, useEffect, useRef} from 'react';
-import {DisplayedMessage, DisplayedThinkingMessage, DisplayedToolCallMessage, useChatService} from './useChatService';
+import {ChatMessage, ThinkingMessage, ToolCallMessage, useChatService} from './useChatService';
 import {EnterMessage} from "./EnterMessage.tsx";
 import {MarkdownRenderer} from './MarkdownRenderer.tsx';
 import ChatBubbleIcon from "../../assets/icons/chat-bubble-icon.svg?react";
@@ -21,7 +21,7 @@ const Chat = () => {
   );
 };
 
-function Messages({messages, closed}: { messages: DisplayedMessage[], closed: boolean }) {
+function Messages({messages, closed}: { messages: ChatMessage[], closed: boolean }) {
   const anchorRef = useRef<HTMLDivElement>(null);
   const typing = messages.length > 0 && messages[messages.length - 1].type === "user";
 
@@ -43,7 +43,7 @@ function Messages({messages, closed}: { messages: DisplayedMessage[], closed: bo
   </div>;
 }
 
-const Message = memo(({message}: { message: DisplayedMessage }) => {
+const Message = memo(({message}: { message: ChatMessage }) => {
   const isUserMessage = message.type === 'user';
 
   if (message.type === 'tool-call')
@@ -66,12 +66,12 @@ const Message = memo(({message}: { message: DisplayedMessage }) => {
       <div className="flex items-center gap-2 mb-1">
         <span className="font-semibold text-sm text-gray-300">{isUserMessage ? "You" : "Envoy"}</span>
       </div>
-      <MarkdownRenderer markdown={message.message}/>
+      <MarkdownRenderer markdown={message.text}/>
     </div>
   </div>;
 });
 
-function ToolCall({message}: { message: DisplayedToolCallMessage }) {
+function ToolCall({message}: { message: ToolCallMessage }) {
   return <details className="ml-12 text-xs text-gray-400 text-md italic animate-fade-in">
     <summary>Calling tool {message.tool}</summary>
 
@@ -82,10 +82,10 @@ function ToolCall({message}: { message: DisplayedToolCallMessage }) {
   </details>;
 }
 
-function Thinking({message}: { message: DisplayedThinkingMessage }) {
+function Thinking({message}: { message: ThinkingMessage }) {
   return <details className={'ml-12 text-xs text-gray-400 cursor-pointer'}>
     <summary>Thinking...</summary>
-    <MarkdownRenderer markdown={message.message} className='text-xs text-gray-400 m-4'/>
+    <MarkdownRenderer markdown={message.text} className='text-xs text-gray-400 m-4'/>
   </details>
 }
 
