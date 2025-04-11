@@ -51,8 +51,11 @@ class ClaudeSession {
                         is RawContentBlockDeltaType.Thinking ->
                             session.send(OutgoingMessage.Thinking(delta.text, delta = true))
 
+                        is RawContentBlockDeltaType.InputJson -> {
+                            // ignore
+                        }
+
                         is RawContentBlockDeltaType.Citation,
-                        is RawContentBlockDeltaType.InputJson,
                         is RawContentBlockDeltaType.Signature -> {
                             log.debug("unhandled delta: {}", delta)
                         }
@@ -72,12 +75,14 @@ class ClaudeSession {
                         session.send(OutgoingMessage.Text(block.text))
 
                     is ContentBlockType.ToolUse -> {
-                        session.send(OutgoingMessage.ToolCall(tool = block.name, input = block.input.prettyPrint()))
+                        val formattedInput = block.input.prettyPrint()
+                        session.send(OutgoingMessage.ToolCall(tool = block.name, input = formattedInput))
 
                         val tool = tools.find { it.name == block.name }
                         if (tool != null) {
                             try {
                                 val result = tool.code(block.input)
+                                session.send(OutgoingMessage.ToolCall(tool = block.name, input = formattedInput, output = result))
                                 params.addUserMessageOfBlockParams(
                                     listOf(
                                         ContentBlockParam.ofToolResult(

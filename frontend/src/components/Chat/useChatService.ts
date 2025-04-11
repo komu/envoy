@@ -133,6 +133,9 @@ function processServerMessage(prevMessages: ChatMessage[], message: ServerMessag
       }
     }
     case "tool-call":
-      return appendMessage({type: "tool-call", tool: message.tool, input: message.input});
+      if (lastMessage?.type !== "tool-call" || lastMessage.output !== undefined || message.output === null)
+        return appendMessage({type: "tool-call", tool: message.tool, input: message.input});
+      else
+        return replaceLastMessage({type: "tool-call", tool: message.tool, input: message.input, output: message.output});
   }
 }

@@ -16,5 +16,5 @@ sealed class OutgoingMessage {
 
     @Serializable
     @SerialName("tool-call")
-    data class ToolCall(val tool: String, val input: String) : OutgoingMessage()
+    data class ToolCall(val tool: String, val input: String, val output: String? = null) : OutgoingMessage()
 }

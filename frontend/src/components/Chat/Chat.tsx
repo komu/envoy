@@ -47,10 +47,10 @@ const Message = memo(({message}: { message: ChatMessage }) => {
   const isUserMessage = message.type === 'user';
 
   if (message.type === 'tool-call')
-    return <ToolCall message={message}/>;
+    return <ToolCall toolCall={message}/>;
 
   if (message.type === 'thinking')
-    return <Thinking message={message}/>
+    return <Thinking thinking={message}/>
 
   return <div className="flex items-start gap-3 animate-fade-in">
     <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-1 ${
@@ -71,21 +71,26 @@ const Message = memo(({message}: { message: ChatMessage }) => {
   </div>;
 });
 
-function ToolCall({message}: { message: ToolCallMessage }) {
+function ToolCall({toolCall}: { toolCall: ToolCallMessage }) {
   return <details className="ml-12 text-xs text-gray-400 text-md italic animate-fade-in">
-    <summary>Calling tool {message.tool}</summary>
+    <summary>Calling tool {toolCall.tool}</summary>
 
     <div className="flex flex-col m-4 gap-4">
       <div>Input:</div>
-      <div className="whitespace-pre font-mono">{message.input}</div>
+      <div className="whitespace-pre font-mono">{toolCall.input}</div>
     </div>
+
+    {toolCall.output && <div className="flex flex-col m-4 gap-4">
+      <div>output:</div>
+      <div className="whitespace-pre font-mono">{toolCall.output}</div>
+    </div>}
   </details>;
 }
 
-function Thinking({message}: { message: ThinkingMessage }) {
+function Thinking({thinking}: { thinking: ThinkingMessage }) {
   return <details className={'ml-12 text-xs text-gray-400 cursor-pointer'}>
     <summary>Thinking...</summary>
-    <MarkdownRenderer markdown={message.text} className='text-xs text-gray-400 m-4'/>
+    <MarkdownRenderer markdown={thinking.text} className='text-xs text-gray-400 m-4'/>
   </details>
 }
 
