@@ -8,7 +8,8 @@ export interface AssistantMessage {
 
 export interface ToolCallMessage {
   type: "tool-call";
-  message: string;
+  tool: string;
+  input: string;
 }
 
 export interface DeltaMessage {
@@ -21,13 +22,42 @@ export interface UserMessage {
   message: string;
 }
 
-export type ChatMessage = AssistantMessage | ToolCallMessage | DeltaMessage | UserMessage;
+export interface DeltaThinkingMessage {
+  type: "delta-thinking";
+  delta: string;
+}
 
-export interface DisplayedMessage {
-  type: "tool-call" | "assistant" | "user";
+export interface ThinkingMessage {
+  type: "thinking";
+  message: string;
+}
+
+export type ChatMessage = AssistantMessage | ToolCallMessage | DeltaMessage | UserMessage | DeltaThinkingMessage | ThinkingMessage;
+
+export interface DisplayedToolCallMessage {
+  type: "tool-call";
+  tool: string;
+  input: string;
+}
+
+export interface DisplayedAssistantMessage {
+  type: "assistant";
   message: string;
   complete: boolean;
 }
+
+export interface DisplayedThinkingMessage {
+  type: "thinking";
+  message: string;
+  complete: boolean;
+}
+
+export interface DisplayedUserMessage {
+  type: "user";
+  message: string;
+}
+
+export type DisplayedMessage = DisplayedAssistantMessage | DisplayedToolCallMessage | DisplayedUserMessage | DisplayedThinkingMessage;
 
 export function useChatService() {
   const [messages, setMessages] = useState<DisplayedMessage[]>([]);
@@ -72,27 +102,60 @@ export function useChatService() {
       case "assistant": {
         setMessages(prevMessages => {
           const lastMessage = prevMessages.length > 0 ? prevMessages[prevMessages.length - 1] : undefined;
-          if (lastMessage !== undefined && !lastMessage.complete) {
-            return [...prevMessages.slice(0, -1), {type: "assistant", message: message.message, complete: true}];
+          const newMessage: DisplayedMessage = {type: "assistant", message: message.message, complete: true};
+          if (lastMessage?.type === "assistant" && !lastMessage.complete) {
+            return [...prevMessages.slice(0, -1), newMessage];
           } else {
-            return [...prevMessages, {type: "assistant", message: message.message, complete: true}];
+            return [...prevMessages, newMessage];
+          }
+        });
+        break;
+      }
+      case "thinking": {
+        setMessages(prevMessages => {
+          const lastMessage = prevMessages.length > 0 ? prevMessages[prevMessages.length - 1] : undefined;
+          const newMessage: DisplayedMessage = {type: "thinking", message: message.message, complete: true};
+          if (lastMessage?.type === "thinking" && !lastMessage.complete) {
+            return [...prevMessages.slice(0, -1), newMessage];
+          } else {
+            return [...prevMessages, newMessage];
           }
         });
         break;
       }
       case "user":
-        appendMessage({type: "user", message: message.message, complete: true});
+        appendMessage({type: "user", message: message.message});
         break;
       case "tool-call":
-        appendMessage({type: "tool-call", message: message.message, complete: true});
+        appendMessage({type: "tool-call", tool: message.tool, input: message.input});
         break;
       case "delta": {
         setMessages(prevMessages => {
           const lastMessage = prevMessages.length > 0 ? prevMessages[prevMessages.length - 1] : undefined;
-          if (lastMessage === undefined || lastMessage.complete) {
-            return [...prevMessages, {type: "assistant", message: message.delta, complete: false}];
+          if (lastMessage?.type === "assistant" && !lastMessage.complete) {
+            return [...prevMessages.slice(0, -1), {
+              type: "assistant",
+              message: lastMessage.message + message.delta,
+              complete: false
+            }];
           } else {
-            return [...prevMessages.slice(0, -1), {type: "assistant", message: lastMessage.message + message.delta, complete: false}];
+            return [...prevMessages, {type: "assistant", message: message.delta, complete: false}];
+          }
+        });
+        break;
+      }
+      case "delta-thinking":
+      {
+        setMessages(prevMessages => {
+          const lastMessage = prevMessages.length > 0 ? prevMessages[prevMessages.length - 1] : undefined;
+          if (lastMessage?.type === "thinking" && !lastMessage.complete) {
+            return [...prevMessages.slice(0, -1), {
+              type: "thinking",
+              message: lastMessage.message + message.delta,
+              complete: false
+            }];
+          } else {
+            return [...prevMessages, {type: "thinking", message: message.delta, complete: false}];
           }
         });
         break;
@@ -106,7 +169,7 @@ export function useChatService() {
 
   const sendMessage = (message: string) => {
     if (message && message.trim() !== '') {
-      appendMessage({type: 'user', message, complete: true});
+      appendMessage({type: 'user', message});
 
       if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
         socketRef.current.send(JSON.stringify({message}));

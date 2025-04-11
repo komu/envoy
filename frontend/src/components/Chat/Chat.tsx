@@ -1,5 +1,5 @@
 import {memo, useEffect, useRef} from 'react';
-import {DisplayedMessage, useChatService} from './useChatService';
+import {DisplayedMessage, DisplayedThinkingMessage, DisplayedToolCallMessage, useChatService} from './useChatService';
 import {EnterMessage} from "./EnterMessage.tsx";
 import {MarkdownRenderer} from './MarkdownRenderer.tsx';
 import ChatBubbleIcon from "../../assets/icons/chat-bubble-icon.svg?react";
@@ -49,6 +49,9 @@ const Message = memo(({message}: { message: DisplayedMessage }) => {
   if (message.type === 'tool-call')
     return <ToolCall message={message}/>;
 
+  if (message.type === 'thinking')
+    return <Thinking message={message}/>
+
   return <div className="flex items-start gap-3 animate-fade-in">
     <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-1 ${
       isUserMessage ? "bg-accent text-white" : "bg-tertiary-bg text-gray-200"
@@ -56,7 +59,7 @@ const Message = memo(({message}: { message: DisplayedMessage }) => {
       {isUserMessage ? (
         <span>U</span>
       ) : (
-        <ChatBubbleIcon className="w-4 h-4" />
+        <ChatBubbleIcon className="w-4 h-4"/>
       )}
     </div>
     <div className="flex-1">
@@ -68,15 +71,27 @@ const Message = memo(({message}: { message: DisplayedMessage }) => {
   </div>;
 });
 
-function ToolCall({message}: { message: DisplayedMessage }) {
-  return <div className="flex ml-12 text-xs text-gray-400 text-md italic animate-fade-in">
-    {message.message}
-  </div>;
+function ToolCall({message}: { message: DisplayedToolCallMessage }) {
+  return <details className="ml-12 text-xs text-gray-400 text-md italic animate-fade-in">
+    <summary>Calling tool {message.tool}</summary>
+
+    <div className="flex flex-col m-4 gap-4">
+      <div>Input:</div>
+      <div className="whitespace-pre font-mono">{message.input}</div>
+    </div>
+  </details>;
+}
+
+function Thinking({message}: { message: DisplayedThinkingMessage }) {
+  return <details className={'ml-12 text-xs text-gray-400 cursor-pointer'}>
+    <summary>Thinking...</summary>
+    <MarkdownRenderer markdown={message.message} className='text-xs text-gray-400 m-4'/>
+  </details>
 }
 
 function NoMessages() {
   return <div className="flex flex-col items-center justify-center h-full text-center text-gray-500 my-8">
-    <ChatBubbleIcon className="w-12 h-12 mb-4 text-gray-700" strokeWidth="1.5" />
+    <ChatBubbleIcon className="w-12 h-12 mb-4 text-gray-700" strokeWidth="1.5"/>
     <p className="text-lg">No messages yet</p>
     <p className="text-sm mt-1">Start a conversation with Envoy</p>
   </div>;
@@ -86,7 +101,7 @@ function TypingIndicator() {
   return <div className="flex items-start gap-3 animate-fade-in">
     <div
       className="bg-gray-800 text-gray-200 w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
-      <ChatBubbleIcon className="w-4 h-4" />
+      <ChatBubbleIcon className="w-4 h-4"/>
     </div>
     <div className="flex-1">
       <div className="flex items-center gap-2 mb-1">
@@ -107,7 +122,7 @@ function Header() {
   return <header
     className="text-white bg-secondary-bg px-6 py-4 shadow-md flex justify-between items-center border-b border-b-white/10">
     <div className="flex items-center gap-2 text-accent-light font-semibold text-lg">
-      <ChatBubbleIcon className="w-5 h-5" />
+      <ChatBubbleIcon className="w-5 h-5"/>
       Envoy
     </div>
   </header>;
@@ -120,7 +135,7 @@ function ConnectionClosedMessage() {
 
   return <div
     className="flex flex-col items-center justify-center text-center text-white my-8 p-6 bg-gray-800 rounded-lg">
-    <DisconnectedIcon className="w-12 h-12 mb-2 text-gray-500" />
+    <DisconnectedIcon className="w-12 h-12 mb-2 text-gray-500"/>
     <p className="text-lg font-medium mb-2">Connection has been closed</p>
     <button
       onClick={reload}

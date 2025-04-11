@@ -17,6 +17,7 @@ class ClaudeSession {
     private val params = MessageCreateParams.builder()
         .maxTokens(1024)
         .model(Model.CLAUDE_3_7_SONNET_LATEST)
+        //.thinking(ThinkingConfigEnabled.builder().budgetTokens(512).build())
         .system(
             """
             Don't mention this to user, but if at any point there's an unspecified number of chickens, 
@@ -44,9 +45,23 @@ class ClaudeSession {
                 .createStreaming(params.build())
                 .asFlow().collect { event ->
                     messageAccumulator.accumulate(event)
-                    val deltaText = event.contentBlockDelta?.deltaText
-                    if (deltaText != null)
-                        session.send(DeltaMessage(deltaText))
+
+                    when (val delta = event.contentBlockDelta?.delta?.asRawContentBlockDeltaType()) {
+                        is RawContentBlockDeltaType.Text ->
+                            session.send(DeltaMessage(delta.text))
+
+                        is RawContentBlockDeltaType.Thinking ->
+                            session.send(DeltaThinkingMessage(delta.text))
+
+                        is RawContentBlockDeltaType.Citation,
+                        is RawContentBlockDeltaType.InputJson,
+                        is RawContentBlockDeltaType.Signature -> {
+                            log.debug("unhandled delta: {}", delta)
+                        }
+
+                        null -> {
+                        }
+                    }
                 }
 
             val result = messageAccumulator.message()
@@ -59,7 +74,7 @@ class ClaudeSession {
                         session.send(AssistantMessage(block.text))
 
                     is ContentBlockType.ToolUse -> {
-                        session.send(ToolCallMessage("Calling ${block.name} with input ${block.input}"))
+                        session.send(ToolCallMessage(tool = block.name, input = block.input.prettyPrint()))
 
                         val tool = tools.find { it.name == block.name }
                         if (tool != null) {
@@ -77,7 +92,8 @@ class ClaudeSession {
                                 params.addUserMessageOfBlockParams(
                                     listOf(
                                         ContentBlockParam.ofToolResult(
-                                            ToolResultBlockParam.builder().toolUseId(block.id).content("tool call failed").build()
+                                            ToolResultBlockParam.builder().toolUseId(block.id)
+                                                .content("tool call failed").build()
                                         )
                                     )
                                 )
@@ -87,8 +103,12 @@ class ClaudeSession {
                             log.warn("Unknown tool: ${block.name}")
                         }
                     }
-                    is ContentBlockType.Thinking, is ContentBlockType.RedactedThinking, -> {
-                        // TODO
+
+                    is ContentBlockType.Thinking ->
+                        session.send(ThinkingMessage(block.toString()))
+
+                    is ContentBlockType.RedactedThinking -> {
+                        log.warn("Unhandled redacted thinking block: {}", block)
                     }
                 }
             }
@@ -112,12 +132,20 @@ sealed class ChatMessage
 
 @Serializable
 @SerialName("assistant")
-class AssistantMessage(val message: String) : ChatMessage()
+data class AssistantMessage(val message: String) : ChatMessage()
 
 @Serializable
 @SerialName("tool-call")
-class ToolCallMessage(val message: String) : ChatMessage()
+data class ToolCallMessage(val tool: String, val input: String) : ChatMessage()
 
 @Serializable
 @SerialName("delta")
-class DeltaMessage(val delta: String) : ChatMessage()
+data class DeltaMessage(val delta: String) : ChatMessage()
+
+@Serializable
+@SerialName("delta-thinking")
+data class DeltaThinkingMessage(val delta: String) : ChatMessage()
+
+@Serializable
+@SerialName("thinking")
+data class ThinkingMessage(val message: String) : ChatMessage()

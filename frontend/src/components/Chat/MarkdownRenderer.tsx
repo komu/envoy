@@ -1,8 +1,9 @@
 import {marked} from "marked";
 import {useEffect, useState} from "react";
 
-export function MarkdownRenderer({markdown}: { markdown: string }) {
+export function MarkdownRenderer({markdown, className}: { markdown: string, className?: string }) {
   const [html, setHtml] = useState('');
+  const classes = `prose prose-sm prose-invert max-w-none ${className ?? ''}`;
 
   useEffect(() => {
     marked(markdown, {async: true})
@@ -11,6 +12,6 @@ export function MarkdownRenderer({markdown}: { markdown: string }) {
   }, [markdown]);
 
   return <div
-    className="prose prose-sm prose-invert max-w-none"
+    className={classes}
     dangerouslySetInnerHTML={{__html: html}}/>
 }

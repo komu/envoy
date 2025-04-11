@@ -2,16 +2,20 @@ package dev.komu.envoy.backend
 
 import com.anthropic.core.JsonValue
 import com.anthropic.core.http.AsyncStreamResponse
+import com.anthropic.models.messages.CitationsDelta
 import com.anthropic.models.messages.ContentBlock
+import com.anthropic.models.messages.InputJsonDelta
 import com.anthropic.models.messages.Message
 import com.anthropic.models.messages.RawContentBlockDelta
 import com.anthropic.models.messages.RawContentBlockDeltaEvent
 import com.anthropic.models.messages.RawMessageStreamEvent
 import com.anthropic.models.messages.RedactedThinkingBlock
+import com.anthropic.models.messages.SignatureDelta
 import com.anthropic.models.messages.StopReason
 import com.anthropic.models.messages.TextBlock
 import com.anthropic.models.messages.TextDelta
 import com.anthropic.models.messages.ThinkingBlock
+import com.anthropic.models.messages.ThinkingDelta
 import com.anthropic.models.messages.ToolUseBlock
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -52,9 +56,6 @@ val RawMessageStreamEvent.contentBlockDelta: RawContentBlockDeltaEvent?
 val RawContentBlockDeltaEvent.delta: RawContentBlockDelta
     get() = delta()
 
-val RawContentBlockDeltaEvent.deltaText: String?
-    get() = delta.text?.text()
-
 val RawContentBlockDelta.text: TextDelta?
     get() = text().getOrNull()
 
@@ -71,6 +72,22 @@ fun ContentBlock.asContentBlockType(): ContentBlockType = accept(object : Conten
 sealed class ContentBlockType {
     data class Text(val text: String) : ContentBlockType()
     data class ToolUse(val id: String, val name: String, val input: JsonValue) : ContentBlockType()
-    class Thinking(val thinking: ThinkingBlock) : ContentBlockType()
-    class RedactedThinking(val redactedThinking: RedactedThinkingBlock) : ContentBlockType()
+    data class Thinking(val thinking: ThinkingBlock) : ContentBlockType()
+    data class RedactedThinking(val redactedThinking: RedactedThinkingBlock) : ContentBlockType()
+}
+
+fun RawContentBlockDelta.asRawContentBlockDeltaType(): RawContentBlockDeltaType = accept(object :RawContentBlockDelta.Visitor<RawContentBlockDeltaType> {
+    override fun visitText(text: TextDelta) = RawContentBlockDeltaType.Text(text.text())
+    override fun visitThinking(thinking: ThinkingDelta) = RawContentBlockDeltaType.Thinking(thinking.thinking())
+    override fun visitCitations(citations: CitationsDelta) = RawContentBlockDeltaType.Citation(citations.citation())
+    override fun visitSignature(signature: SignatureDelta) = RawContentBlockDeltaType.Signature(signature.signature())
+    override fun visitInputJson(inputJson: InputJsonDelta) = RawContentBlockDeltaType.InputJson(inputJson.partialJson())
+})
+
+sealed class RawContentBlockDeltaType {
+    data class Text(val text: String) : RawContentBlockDeltaType()
+    data class Thinking(val text: String) : RawContentBlockDeltaType()
+    data class Citation(val citation: CitationsDelta.Citation) : RawContentBlockDeltaType()
+    data class Signature(val signature: String) : RawContentBlockDeltaType()
+    data class InputJson(val partialJson: String) : RawContentBlockDeltaType()
 }
