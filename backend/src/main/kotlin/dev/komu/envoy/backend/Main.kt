@@ -33,20 +33,19 @@ class ChatApplication {
 
         routing {
             webSocket("/ws") {
-                handleWebSocketSesssion()
+                handleWebSocketSession()
             }
             staticResources("", "web")
         }
     }
 
-    private suspend fun DefaultWebSocketServerSession.handleWebSocketSesssion() {
+    private suspend fun DefaultWebSocketServerSession.handleWebSocketSession() {
         val session = ClaudeSession()
 
         incoming.consumeEach { frame ->
             try {
                 if (frame is Frame.Text) {
-                    val msg = Json.Default.decodeFromString(IncomingMessage.serializer(), frame.readText()).message
-
+                    val msg = Json.Default.decodeFromString(IncomingMessage.serializer(), frame.readText())
                     session.message(msg, this)
                 }
             } catch (e: Exception) {

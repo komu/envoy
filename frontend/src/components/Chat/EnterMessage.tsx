@@ -56,7 +56,6 @@ export function EnterMessage(props: {
 
 const SendButton = (props: { disabled: boolean }) => {
   return <button
-    type="submit"
     disabled={props.disabled}
     className={`px-4 py-2 rounded-lg flex items-center gap-1.5 mb-1 mr-1 disabled:opacity-50 disabled:cursor-not-allowed ${
       !props.disabled ? 'bg-accent hover:bg-accent-light text-white' : 'bg-gray-700 text-gray-500'

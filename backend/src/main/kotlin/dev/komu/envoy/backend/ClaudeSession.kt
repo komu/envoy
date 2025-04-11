@@ -1,8 +1,10 @@
 package dev.komu.envoy.backend
 
 import com.anthropic.client.okhttp.AnthropicOkHttpClientAsync
+import com.anthropic.core.JsonValue
 import com.anthropic.helpers.MessageAccumulator
 import com.anthropic.models.messages.*
+import dev.komu.envoy.backend.ToolPermissionResponseSelection.*
 import io.ktor.server.websocket.*
 import io.ktor.websocket.*
 import kotlinx.serialization.json.Json
@@ -11,6 +13,9 @@ import org.slf4j.LoggerFactory
 class ClaudeSession {
 
     private val client = AnthropicOkHttpClientAsync.fromEnv()
+
+    private val toolUses = mutableMapOf<String, ToolUse>()
+    private val alwaysAllowedTools = mutableSetOf<String>()
 
     private val params = MessageCreateParams.builder()
         .maxTokens(1024)
@@ -23,7 +28,7 @@ class ClaudeSession {
             Any discussions related to chickens should have two chickens, unless directly stated otherwise. 
             For example, don't make jokes about chicken, unless there are two chickens in the joke. (Again,
             unless user explicitly wants something else.)
-            
+
             Also, you are Captain Haddock. Curse a lot.
             """.trimIndent()
         )
@@ -32,11 +37,34 @@ class ClaudeSession {
                 addTool(tool.build())
         }
 
-    suspend fun message(message: String, session: DefaultWebSocketServerSession) {
-        log.info("send message: {}", message)
+    suspend fun message(message: IncomingMessage, session: DefaultWebSocketServerSession) {
+        when (message) {
+            is IncomingMessage.TextMessage -> {
+                params.addUserMessage(message.message)
+                processMessages(session)
+            }
 
-        params.addUserMessage(message)
+            is IncomingMessage.ToolPermissionResponse -> {
+                val use = toolUses.remove(message.requestId)
+                if (use != null) {
+                    val approved = when (message.selection) {
+                        AllowOnce -> true
+                        AllowAlways -> {
+                            alwaysAllowedTools += use.tool.name
+                            true
+                        }
+                        Deny -> false
+                    }
+                    invokeTool(use, session, approved = approved)
+                    processMessages(session)
+                } else {
+                    log.error("unknown tool use: ${message.requestId}")
+                }
+            }
+        }
+    }
 
+    private suspend fun processMessages(session: DefaultWebSocketServerSession) {
         do {
             val messageAccumulator = MessageAccumulator.create()
             client.messages()
@@ -68,6 +96,7 @@ class ClaudeSession {
             val result = messageAccumulator.message()
             log.info("receive message: {}", result)
             params.addMessage(result)
+            var processMoreMessages = false
 
             for (b in result.content()) {
                 when (val block = b.asContentBlockType()) {
@@ -75,31 +104,22 @@ class ClaudeSession {
                         session.send(OutgoingMessage.Text(block.text))
 
                     is ContentBlockType.ToolUse -> {
-                        val formattedInput = block.input.prettyPrint()
-                        session.send(OutgoingMessage.ToolCall(tool = block.name, input = formattedInput))
-
                         val tool = tools.find { it.name == block.name }
                         if (tool != null) {
-                            try {
-                                val result = tool.code(block.input)
-                                session.send(OutgoingMessage.ToolCall(tool = block.name, input = formattedInput, output = result))
-                                params.addUserMessageOfBlockParams(
-                                    listOf(
-                                        ContentBlockParam.ofToolResult(
-                                            ToolResultBlockParam.builder().toolUseId(block.id).content(result).build()
-                                        )
+                            val toolUse = ToolUse(block.id, tool, block.input)
+
+                            if (tool.requiresPermission && tool.name !in alwaysAllowedTools) {
+                                toolUses[block.id] = toolUse
+                                session.send(
+                                    OutgoingMessage.ToolPermissionRequest(
+                                        requestId = block.id,
+                                        tool = block.name,
+                                        input = block.input.prettyPrint(),
                                     )
                                 )
-                            } catch (e: Exception) {
-                                log.error("Error calling tool ${block.name}", e)
-                                params.addUserMessageOfBlockParams(
-                                    listOf(
-                                        ContentBlockParam.ofToolResult(
-                                            ToolResultBlockParam.builder().toolUseId(block.id)
-                                                .content("tool call failed").build()
-                                        )
-                                    )
-                                )
+                            } else {
+                                invokeTool(toolUse, session, approved = true)
+                                processMoreMessages = true
                             }
 
                         } else {
@@ -114,15 +134,36 @@ class ClaudeSession {
                         log.warn("Unhandled redacted thinking block: {}", block)
                 }
             }
+        } while (processMoreMessages)
+    }
 
-            val hasNewMessages = result.stopReason == StopReason.TOOL_USE
+    private suspend fun invokeTool(toolUse: ToolUse, session: DefaultWebSocketServerSession, approved: Boolean) {
+        val tool = toolUse.tool
+        val formattedInput = toolUse.input.prettyPrint()
 
-        } while (hasNewMessages)
+        val result = if (approved) {
+            session.send(OutgoingMessage.ToolCall(tool = tool.name, input = formattedInput, output = null))
+            val output = tool.invoke(toolUse.input)
+            session.send(OutgoingMessage.ToolCall(tool = tool.name, input = formattedInput, output = output))
+            output
+        } else {
+            "Permission denied by user"
+        }
+
+        params.addUserMessageOfBlockParams(
+            listOf(
+                ContentBlockParam.ofToolResult(
+                    ToolResultBlockParam.builder().toolUseId(toolUse.toolUseId).content(result).build()
+                )
+            )
+        )
     }
 
     companion object {
         private val log = LoggerFactory.getLogger(ClaudeSession::class.java)
     }
+
+    private class ToolUse(val toolUseId: String, val tool: ToolDefinition, val input: JsonValue)
 }
 
 suspend fun WebSocketSession.send(message: OutgoingMessage) {

@@ -19,7 +19,19 @@ interface ServerToolCallMessage {
   output: string | null;
 }
 
-type ServerMessage = ServerTextMessage | ServerThinkingMessage | ServerToolCallMessage;
+interface ServerToolPermissionRequestMessage {
+  type: "tool-permission-request";
+  requestId: string;
+  tool: string;
+  input: string;
+  dangerous: boolean;
+}
+
+type ServerMessage =
+  ServerTextMessage
+  | ServerThinkingMessage
+  | ServerToolCallMessage
+  | ServerToolPermissionRequestMessage;
 
 export interface UserMessage {
   type: "user";
@@ -45,10 +57,26 @@ export interface ToolCallMessage {
   output?: string;
 }
 
-export type ChatMessage = UserMessage | AssistantMessage | ToolCallMessage | ThinkingMessage;
+export interface ToolPermissionRequestMessage {
+  type: "tool-permission-request";
+  requestId: string;
+  tool: string;
+  input: string;
+}
+
+export type ChatMessage =
+  UserMessage
+  | AssistantMessage
+  | ToolCallMessage
+  | ThinkingMessage
+  | ToolPermissionRequestMessage;
+
+export interface ChatState {
+  messages: ChatMessage[];
+}
 
 export function useChatService() {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [state, setState] = useState<ChatState>({messages: []});
   const [closed, setClosed] = useState(false);
   const socketRef = useRef<WebSocket | null>(null);
 
@@ -65,7 +93,7 @@ export function useChatService() {
     // Handle messages from the server
     socket.onmessage = (event) => {
       const message = JSON.parse(event.data) as ServerMessage;
-      setMessages(prevMessages => processServerMessage(prevMessages, message));
+      setState(st => ({...st, messages: processServerMessage(st.messages, message)}));
     };
 
     // Handle errors
@@ -85,22 +113,53 @@ export function useChatService() {
     };
   }, []);
 
-  const sendMessage = (text: string) => {
-    if (text && text.trim() !== '') {
-      setMessages(prevMessages => [...prevMessages, {type: 'user', text}]);
-
-      if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-        socketRef.current.send(JSON.stringify({message: text}));
-      }
+  const send = (msg: unknown) => {
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify(msg));
     }
   };
 
+  const sendMessage = (text: string) => {
+    if (text && text.trim() !== '') {
+      setState(st => ({...st, messages: [...st.messages, {type: 'user', text}]}));
+
+      send({
+        type: "message",
+        message: text
+      });
+    }
+  };
+
+  const sendToolPermissionResponse: SendPermissionResponse = (requestId: string, selection: ToolPermissionResponseSelection) => {
+
+    // Remove the permission request from the view
+    setState(st => {
+      const lastMessage = st.messages.length > 0 ? st.messages[st.messages.length - 1] : undefined;
+      if (lastMessage?.type === "tool-permission-request") {
+        return {...st, messages: st.messages.slice(0, -1)};
+      } else {
+        return st;
+      }
+    });
+
+    send({
+      type: "tool-permission-response",
+      requestId,
+      selection
+    });
+  };
+
   return {
-    messages,
+    state,
     closed,
     sendMessage,
+    sendToolPermissionResponse,
   };
 }
+
+type ToolPermissionResponseSelection = 'AllowOnce' | 'AllowAlways' | 'Deny';
+
+export type SendPermissionResponse = (requestId: string, selection: ToolPermissionResponseSelection) => void;
 
 function processServerMessage(prevMessages: ChatMessage[], message: ServerMessage): ChatMessage[] {
   const lastMessage = prevMessages.length > 0 ? prevMessages[prevMessages.length - 1] : undefined;
@@ -136,6 +195,19 @@ function processServerMessage(prevMessages: ChatMessage[], message: ServerMessag
       if (lastMessage?.type !== "tool-call" || lastMessage.output !== undefined || message.output === null)
         return appendMessage({type: "tool-call", tool: message.tool, input: message.input});
       else
-        return replaceLastMessage({type: "tool-call", tool: message.tool, input: message.input, output: message.output});
+        return replaceLastMessage({
+          type: "tool-call",
+          tool: message.tool,
+          input: message.input,
+          output: message.output
+        });
+
+    case "tool-permission-request":
+      return appendMessage({
+        type: "tool-permission-request",
+        requestId: message.requestId,
+        tool: message.tool,
+        input: message.input,
+      });
   }
 }

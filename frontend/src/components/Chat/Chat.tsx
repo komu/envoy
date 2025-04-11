@@ -1,27 +1,41 @@
 import {memo, useEffect, useRef} from 'react';
-import {ChatMessage, ThinkingMessage, ToolCallMessage, useChatService} from './useChatService';
+import {
+  ChatMessage, SendPermissionResponse,
+  ThinkingMessage,
+  ToolCallMessage,
+  useChatService
+} from './useChatService';
 import {EnterMessage} from "./EnterMessage.tsx";
 import {MarkdownRenderer} from './MarkdownRenderer.tsx';
 import ChatBubbleIcon from "../../assets/icons/chat-bubble-icon.svg?react";
 import DisconnectedIcon from "../../assets/icons/disconnected-icon.svg?react";
+import { ToolPermissionRequest } from './ToolPermissionRequest.tsx';
 
 const Chat = () => {
-  const {messages, closed, sendMessage} = useChatService();
+  const {state, closed, sendMessage, sendToolPermissionResponse} = useChatService();
 
   return (
     <div className="flex flex-col h-[100vh] justify-between items-stretch">
       <Header/>
 
-      <Messages messages={messages} closed={closed}/>
+      <Messages
+        messages={state.messages}
+        closed={closed}
+        onPermissionResponse={sendToolPermissionResponse}
+      />
 
       <EnterMessage onSubmit={sendMessage}
-                    placeholder={messages.length === 0 ? "Send a message..." : "Type your reply..."}
+                    placeholder={state.messages.length === 0 ? "Send a message..." : "Type your reply..."}
                     disabled={closed}/>
     </div>
   );
 };
 
-function Messages({messages, closed}: { messages: ChatMessage[], closed: boolean }) {
+function Messages({messages, closed, onPermissionResponse}: {
+  messages: ChatMessage[],
+  closed: boolean,
+  onPermissionResponse: SendPermissionResponse,
+}) {
   const anchorRef = useRef<HTMLDivElement>(null);
   const typing = messages.length > 0 && messages[messages.length - 1].type === "user";
 
@@ -32,7 +46,8 @@ function Messages({messages, closed}: { messages: ChatMessage[], closed: boolean
   return <div className="flex-grow overflow-y-auto px-6 py-4 space-y-6 w-full max-w-4xl self-center">
     {messages.length === 0
       ? <NoMessages/>
-      : messages.map((message, index) => <Message key={index} message={message}/>
+      : messages.map((message, index) => <Message key={index} message={message}
+                                                  onPermissionResponse={onPermissionResponse}/>
       )
     }
 
@@ -43,14 +58,20 @@ function Messages({messages, closed}: { messages: ChatMessage[], closed: boolean
   </div>;
 }
 
-const Message = memo(({message}: { message: ChatMessage }) => {
+const Message = memo(({message, onPermissionResponse}: {
+  message: ChatMessage,
+  onPermissionResponse: SendPermissionResponse,
+}) => {
   const isUserMessage = message.type === 'user';
 
   if (message.type === 'tool-call')
     return <ToolCall toolCall={message}/>;
 
   if (message.type === 'thinking')
-    return <Thinking thinking={message}/>
+    return <Thinking thinking={message}/>;
+
+  if (message.type === 'tool-permission-request')
+    return <ToolPermissionRequest request={message} onResponse={onPermissionResponse}/>;
 
   return <div className="flex items-start gap-3 animate-fade-in">
     <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-1 ${
